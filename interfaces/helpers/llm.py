@@ -36,11 +36,10 @@ def sendLLMData(promptText, responseText, temperature, maxTokens, id):
     }
     # POST the data to the server
     response = requests.post('http://localhost:5001/send_llm_data', json=data)
-    print(response.text)
 
 def llm(prompt="Tell the user they have to enter a prompt", max_tokens=100, temperature=0.7, send=True):
 
-    def llm_internal(prompt="Internal call", max_tokens=100, temperature=0.7, send=False, duplicate=False, id=None, dupCompletion=""):
+    def llm_internal(prompt="Internal call", max_tokens=max_tokens, temperature=0.7, send=False, duplicate=False, id=None, dupCompletion=""):
 
         # Tell the server if we are loading a new ui element or not
         if send and not duplicate:
@@ -51,7 +50,7 @@ def llm(prompt="Tell the user they have to enter a prompt", max_tokens=100, temp
         if not duplicate:
             client = openai.Client(api_key=api_key)
             response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
+                model="gpt-4o",
                 messages=[
                     {"role": "system", "content": ""},
                     {"role": "user", "content": prompt}

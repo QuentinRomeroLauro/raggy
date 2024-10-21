@@ -25,7 +25,6 @@ class Answer:
         }
         # POST the data to the server
         response = requests.post('http://localhost:5001/send_answer', json=data)
-        print(response.text)
     
         # set loading to false
         requests.post('http://localhost:5001/set_loading', json={'loading': False })

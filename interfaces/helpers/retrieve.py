@@ -19,14 +19,205 @@ from interfaces.helpers.local_loader import get_document_text
 from interfaces.helpers.remote_loader import download_file
 from dotenv import load_dotenv
 from time import sleep
+import numpy as np
 import signal
-# Naming pattern for different collections, that contains information about the parameters used to create the collection
-# chunk_size, chunk_overlap
-# collection_name = "chroma_1000_0"
-# then, in our retrievr code, we can use this information to load the correct collection, or create a new one if it doesn't exist
-# we should also have some logic just to look for collections that have the same parameters, and if they exist, we should load them instead of creating a new one
 
-# we should also have different search functions that would work on all of the collections, so that the user can easily chansge them 
+from langchain_community.retrievers import BM25Retriever
+from langchain_community.retrievers import TFIDFRetriever
+
+# ================================================
+"""
+Code adapted from langchain_community.vectorstores.chroma to support MMR search with scores
+
+If this makes absolutely no sense, see the original code here: https://api.python.langchain.com/en/latest/_modules/langchain_chroma/vectorstores.html#Chroma.max_marginal_relevance_search
+"""
+
+DEFAULT_K = 4  # Number of Documents to return.
+
+def _results_to_docs(results):
+    return [doc for doc, _ in _results_to_docs_and_scores(results)]
+
+
+def _results_to_docs_and_scores(results):
+    return [
+        # TODO: Chroma can do batch querying,
+        # we shouldn't hard code to the 1st result
+        (Document(page_content=result[0], metadata=result[1] or {}), result[2])
+        for result in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        )
+    ]
+
+def maximal_marginal_relevance(
+    query_embedding: np.ndarray,
+    embedding_list: list,
+    lambda_mult: float = 0.5,
+    k: int = 4,
+):
+    """Calculate maximal marginal relevance.
+
+    Args:
+        query_embedding: Query embedding.
+        embedding_list: List of embeddings to select from.
+        lambda_mult: Number between 0 and 1 that determines the degree
+                of diversity among the results with 0 corresponding
+                to maximum diversity and 1 to minimum diversity.
+                Defaults to 0.5.
+        k: Number of Documents to return. Defaults to 4.
+
+    Returns:
+        List of indices of embeddings selected by maximal marginal relevance.
+    """
+    if min(k, len(embedding_list)) <= 0:
+        return []
+    if query_embedding.ndim == 1:
+        query_embedding = np.expand_dims(query_embedding, axis=0)
+    similarity_to_query = cosine_similarity(query_embedding, embedding_list)[0]
+    most_similar = int(np.argmax(similarity_to_query))
+    idxs = [most_similar]
+    selected = np.array([embedding_list[most_similar]])
+    while len(idxs) < min(k, len(embedding_list)):
+        best_score = -np.inf
+        idx_to_add = -1
+        similarity_to_selected = cosine_similarity(embedding_list, selected)
+        for i, query_score in enumerate(similarity_to_query):
+            if i in idxs:
+                continue
+            redundant_score = max(similarity_to_selected[i])
+            equation_score = (
+                lambda_mult * query_score - (1 - lambda_mult) * redundant_score
+            )
+            if equation_score > best_score:
+                best_score = equation_score
+                idx_to_add = i
+        idxs.append(idx_to_add)
+        selected = np.append(selected, [embedding_list[idx_to_add]], axis=0)
+    return idxs
+
+
+def cosine_similarity(X, Y):
+    """Row-wise cosine similarity between two equal-width matrices.
+
+    Raises:
+        ValueError: If the number of columns in X and Y are not the same.
+    """
+    if len(X) == 0 or len(Y) == 0:
+        return np.array([])
+
+    X = np.array(X)
+    Y = np.array(Y)
+    if X.shape[1] != Y.shape[1]:
+        raise ValueError(
+            "Number of columns in X and Y must be the same. X has shape"
+            f"{X.shape} "
+            f"and Y has shape {Y.shape}."
+        )
+
+    X_norm = np.linalg.norm(X, axis=1)
+    Y_norm = np.linalg.norm(Y, axis=1)
+    # Ignore divide by zero errors run time warnings as those are handled below.
+    with np.errstate(divide="ignore", invalid="ignore"):
+        similarity = np.dot(X, Y.T) / np.outer(X_norm, Y_norm)
+    similarity[np.isnan(similarity) | np.isinf(similarity)] = 0.0
+    return similarity
+
+
+def BM25(query, k, chroma_db):
+    docs = chroma_db._Chroma__get_or_create_collection("")
+
+    retriever = BM25Retriever.from_documents()
+
+
+
+
+# End of adapted langchain code
+# ===========================================================================
+
+
+class ExtendedTFIDFRetriever(TFIDFRetriever):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def invoke(self, query: str, k: int):
+        self.k = k
+        return self._get_relevant_documents(query)
+
+    def _get_relevant_documents(
+        self, query , *, run_manager= None
+    ):
+        from sklearn.metrics.pairwise import cosine_similarity
+
+        query_vec = self.vectorizer.transform([query])
+        results = cosine_similarity(self.tfidf_array, query_vec).reshape((-1,))
+        top_indices = results.argsort()[-self.k :][::-1]
+        return_docs = [(self.docs[i], results[i]) for i in top_indices]
+        return return_docs
+
+
+
+class ExtendedChroma(Chroma):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+    
+    def max_marginal_relevance_search_with_score(self,
+        query: str,
+        k: int = DEFAULT_K,
+        fetch_k: int = 20,
+        lambda_mult: float = 0.5,
+        filter = None,
+        where_document = None,
+        **kwargs,
+    ):
+        
+        if self._embedding_function is None:
+            raise ValueError(
+                "For MMR search, you must specify an embedding function on" "creation."
+            )
+
+        embedding = self._embedding_function.embed_query(query)
+        
+        results = self._Chroma__query_collection(
+            query_embeddings=embedding,
+            n_results=fetch_k,
+            where=filter,
+            where_document=where_document,
+            include=["metadatas", "documents", "distances", "embeddings"],
+            **kwargs,
+        )
+        mmr_selected = maximal_marginal_relevance(
+            np.array(embedding, dtype=np.float32),
+            results["embeddings"][0],
+            k=k,
+            lambda_mult=lambda_mult,
+        )
+
+        candidates = _results_to_docs_and_scores(results)
+
+        selected_results = [r for i, r in enumerate(candidates) if i in mmr_selected]
+        return selected_results
+    
+    def tfidf(self, query: str, k: int = DEFAULT_K, **kwargs):
+        """
+        Search the collection for the query and return the top k results with scores.
+        """
+
+        db_get = self.get()
+        db_ids = db_get["ids"]
+        if not db_ids:
+            raise ValueError("No documents in the collection")
+
+        doc_list = []
+        for x in range(len(db_ids)):
+            doc = db_get["documents"][x]
+            doc_list.append(doc)
+        
+        retriever = ExtendedTFIDFRetriever.from_texts(doc_list)
+        docs_and_scores = retriever.invoke(query, k)
+        return docs_and_scores
+
+    
 
 
 # Only one retriever is needed, just query the vector DB with the given configurations (!)
@@ -35,12 +226,19 @@ class Retriever:
         self.vectorStores = {}
         self.storesToChunks = {}
         # Load the vector DBs from the store folder
+        self.raptorDB = None
         self.loadVectorDBs()
+        self.loadRaptorCollapsedTreeRetriever()
         self.docStore = docStore
         self.client = client
 
 
-    def invoke(self, query, k, chunkSize, chunkOverlap, searchBy="similarity", send=True, duplicate=False, id=None, dupDocsAndScores=None):
+    # query mode can be 'vanilla' or 'raptor'
+    def invoke(self, query, k, chunkSize, chunkOverlap, retrievalMode="vanilla", searchBy="semantic similarity", send=True, duplicate=False, id=None, dupDocsAndScores=None, dupDocsAndScoresRaptor=None, dupDocsAndScoresVanilla=None):
+        query = str(query)
+        k = int(k)
+        chunkSize = int(chunkSize)
+        chunkOverlap = int(chunkOverlap)
         # tell the interface if we are loading or not
         if (send and self.client) and not duplicate:
             requests.post('http://localhost:5001/set_loading', json={'loading': True})
@@ -51,24 +249,34 @@ class Retriever:
 
         # If the collection doesn't exist, warn with instructions to create it
         if collection_name not in self.vectorStores:
-            logging.warning(f"Collection {collection_name} does not exist. Creating it with default docs.")
-            self.createVectorDB(chunkSize=chunkSize, chunkOverlap=chunkOverlap)
-            collection_name = self.getCollectionName(chunkSize, chunkOverlap)
+            logging.warning(f"Collection {collection_name} does not exist. Please use a pre-indexed size.")
+            # Throw an error if the user tries to create a vector db without a doc store
+            raise ValueError("Please provide a document store to create a vector DB")
+            # self.createVectorDB(chunkSize=chunkSize, chunkOverlap=chunkOverlap)
+            # collection_name = self.getCollectionName(chunkSize, chunkOverlap)
+
             
 
         vs = self.vectorStores[collection_name]
         docs_and_scores = dupDocsAndScores
+        docs_and_scores_vanilla = dupDocsAndScoresVanilla
+        docs_and_scores_raptor = dupDocsAndScoresRaptor
 
         if not duplicate:
-            if searchBy == "similarity" or True:
-                # retriever = vs.as_retriever(search_type="similarity")
-                # docs_and_scores = retriever.invoke(query, k=k)
-                docs_and_scores = vs.similarity_search_with_score(query, k=k+100)
-            elif searchBy == "mmr":
-                retriever = vs.as_retriever(search_type="mmr")
-                docs_and_scores = retriever.invoke(query, k=k+100)
-            elif searchBy == "bm25":
-                pass
+            if searchBy == "semantic similarity":
+                docs_and_scores_raptor = self.raptorDB.similarity_search_with_score(query, k=k+40)
+                docs_and_scores_vanilla = vs.similarity_search_with_score(query, k=k+40)
+            elif searchBy == "max marginal relevance":
+                docs_and_scores_vanilla = vs.max_marginal_relevance_search_with_score(query=query, k=k+40, fetch_k=40)
+                docs_and_scores_raptor = self.raptorDB.max_marginal_relevance_search_with_score(query=query, k=k+40, fetch_k=40)
+            elif searchBy == "tfidf":
+                docs_and_scores_vanilla = vs.tfidf(query=query, k=k+40)
+                docs_and_scores_raptor = self.raptorDB.tfidf(query=query, k=k+40)
+            else:
+                raise ValueError("Invalid searchBy, must be 'semantic similarity', 'max marginal relevance', or 'tfidf', but was " + searchBy)                
+
+                # docs_and_scores_vanilla = vs.full_text_search_with_score(query=query, k=k+100)
+                # docs_and_scores_raptor = self.raptorDB.full_text_search_with_score(query=query, k=k+100)
 
         if not id:
             id = str(uuid.uuid4())
@@ -77,13 +285,22 @@ class Retriever:
         if self.client and send:
             self.sendRetrievalData(
                 query=query,
-                docs_and_scores=docs_and_scores,
+                docs_and_scores_vanilla=docs_and_scores_vanilla,
+                docs_and_scores_raptor=docs_and_scores_raptor,
                 searchBy=searchBy,
                 chunkSize=chunkSize,
                 chunkOverlap=chunkOverlap,
                 k=k,
                 id=id,
+                retrievalMode=retrievalMode,
             )
+
+        if retrievalMode == "raptor":
+            docs_and_scores = docs_and_scores_raptor
+        elif retrievalMode == "vanilla":
+            docs_and_scores = docs_and_scores_vanilla
+        else:
+            raise ValueError("Invalid retrieval mode, must be 'raptor' or 'vanilla'")
 
         # Fork and stop the forked process to wait for a finish running pipeline signal
         pid = os.fork()
@@ -108,12 +325,23 @@ class Retriever:
 
             # process has woken up and is ready to continue, get the new data from the server
             data = requests.get(f"http://localhost:5001/get_data/{id}").json()
-            selectedChunks = data['selectedChunks'] # looks like [0, 1, 2, 3]
-            chunks = data['chunks'] # looks like [{'text': 'text', 'score': 0.5, 'id': 0}, ...]
 
-            # format docs and scores from selectedChunks and chunks
-            docs_and_scores = [(Document(page_content=chunk['text']), chunk['score']) for chunk in chunks if chunk['id'] in selectedChunks]
 
+            selectedChunks = data['selectedChunks'] # looks like ['chunk text 1', 'chunk text 2', ...]
+            print("selectedChunks", selectedChunks)
+            vanillaChunks = data['vanillaChunks'] # looks like [{'text': 'text', 'score': 0.5, 'id': 0}, ...]
+            raptorChunks = data['raptorChunks'] # looks like [{'text': 'text', 'score': 0.5, 'id': 0}, ...]
+            retrievalMode = data['retrievalMode'] # either 'raptor' or 'vanilla'
+
+            # format docs and scores from selectedChunks and chunks depending on the retrieval mode
+            docs_and_scores_raptor = [(Document(page_content=chunk['text']), chunk['score']) for chunk in raptorChunks if chunk in selectedChunks]
+            docs_and_scores_vanilla = [(Document(page_content=chunk['text']), chunk['score']) for chunk in vanillaChunks if chunk in selectedChunks]
+
+            print("docs_and_scores_raptor", docs_and_scores_raptor) 
+            print("docs_and_scores_vanilla", docs_and_scores_vanilla)
+
+            # join docs_and_score_raptor and docs_and_scores_vanilla
+            docs_and_scores = docs_and_scores_raptor + docs_and_scores_vanilla
             """
             We want to make sure that we can handle n number of finish running requests as needed
             this will fork another process to do that, and not send anything to the interface, and associate
@@ -135,31 +363,54 @@ class Retriever:
 
                 # regsiter the replacement process id with the server
                 response = requests.post(f"http://localhost:5001/register_process/{id}/{pid}")
-                self.invoke(query=query, k=k, chunkSize=chunkSize, chunkOverlap=chunkOverlap, searchBy=searchBy, send=False, duplicate=True, id=id, dupDocsAndScores=docs_and_scores)
+                self.invoke(query=query, k=k, chunkSize=chunkSize, chunkOverlap=chunkOverlap, searchBy=searchBy, send=False, duplicate=True, id=id, dupDocsAndScores=docs_and_scores, dupDocsAndScoresRaptor=docs_and_scores_raptor, dupDocsAndScoresVanilla=docs_and_scores_vanilla)
 
 
         # tell the interface if we are loading or not
         if (send and self.client) and not duplicate:
             requests.post('http://localhost:5001/set_loading', json={'loading': False})
 
-        return docs_and_scores[0:k]
+        if self.client:
+            return docs_and_scores[0:k]
+        return docs_and_scores
 
 
-    def loadVectorDBs(self):
+    def loadVectorDBs(self):        
+        """"
+        Note the naming pattern for different collections. This allows us to load the DBs reliably.
+        chroma_{chunk_size}_{chunk_overlap}
+        e.g. collection_name = "chroma_1000_0"
+        """
         # Load all vector DBs in the ./task/store folder
         for file in os.listdir("./task/store"):
             if file.startswith("chroma"):
                 collection_name = file
                 # parse the file name for the chunk size and chunk overlap
-                chunkSize = int(collection_name.split("_")[1])
-                chunkOverlap = int(collection_name.split("_")[2])
-                print("found db in ./task/store", file)
-                db = Chroma(
-                    persist_directory=os.path.join("task/store/", collection_name),
-                    collection_name=collection_name,
-                    embedding_function=OpenAIEmbeddings(model="text-embedding-3-large", chunk_size=chunkSize)
+                try:
+                    chunkSize = int(collection_name.split("_")[1])
+                    chunkOverlap = int(collection_name.split("_")[2])
+                    db = ExtendedChroma(
+                        persist_directory=os.path.join("task/store/", collection_name),
+                        collection_name=collection_name,
+                        embedding_function=OpenAIEmbeddings(model="text-embedding-3-large", chunk_size=chunkSize)
+                    )
+                    self.vectorStores[collection_name] = db
+                except Exception as e:
+                    continue
+
+      
+    def loadRaptorCollapsedTreeRetriever(self):
+        for file in os.listdir("./task/store"):
+            if file.startswith("chroma_raptor_summaries"):
+                collection_name = file
+                db = ExtendedChroma(
+                    persist_directory=os.path.join("task/store/", "chroma_raptor_summaries"),
+                    embedding_function=OpenAIEmbeddings()
                 )
-                self.vectorStores[collection_name] = db
+                self.raptorDB = db
+                return
+        raise ValueError("Raptor DB chroma_raptor_summaries not found in ./task/store")
+
 
 
     def configExists(self, chunkSize, chunkOverlap):
@@ -222,7 +473,6 @@ class Retriever:
         collection_name = self.getCollectionName(chunkSize, chunkOverlap)
         self.storesToChunks[collection_name] = texts
 
-        print(f"Split into {nChunks} chunks")
         return texts
 
         
@@ -232,26 +482,51 @@ class Retriever:
 
 
     def getDocs(self, chunkSize, chunkOverlap):
-        # TODO: update this so that it is based off the original doc store, and can take a folder as a well as a document
-        if self.docStore and not os.path.exists(self.docStore):
-            math_analysis_of_logic_by_boole = "https://www.gutenberg.org/files/36884/36884-pdf.pdf"
-            local_pdf_path = download_file(math_analysis_of_logic_by_boole, pdf_filename)
+        all_chunks = []
+        for filename in os.listdir(self.docStore):
+            if filename.endswith(".pdf"):
+                pdf_filename = os.path.join(self.docStore, filename)
+                if not os.path.exists(pdf_filename):
+                    print(f"file {pdf_filename} not found. Moving onto next.")
+                else:
+                    local_pdf_path = pdf_filename
+
+                with open(local_pdf_path, "rb") as pdf_file:
+                    docs = get_document_text(pdf_file, title=pdf_filename)
+                all_chunks.extend(docs)
+
+        return all_chunks
+
+
+        # # TODO: update this so that it is based off the original doc store, and can take a folder as a well as a document
+        # if self.docStore and not os.path.exists(self.docStore):
+        #     math_analysis_of_logic_by_boole = "https://www.gutenberg.org/files/36884/36884-pdf.pdf"
+        #     local_pdf_path = download_file(math_analysis_of_logic_by_boole, pdf_filename)
+        # else:
+        #     local_pdf_path = self.docStore
+
+        # with open(local_pdf_path, "rb") as pdf_file:
+        #     docs = get_document_text(pdf_file, title="Analysis of Logic")
+
+        # return docs
+
+    def sendRetrievalData(self, query, docs_and_scores_vanilla, retrievalMode, docs_and_scores_raptor, searchBy, chunkSize, chunkOverlap, k, id):
+        if retrievalMode == "raptor":
+            vanillaChunks, __ = self.getChunksAndSelectedChunks(docs_and_scores_vanilla, 0)
+            raptorChunks, selectedChunks = self.getChunksAndSelectedChunks(docs_and_scores_raptor, k)
+        elif retrievalMode == "vanilla":
+            vanillaChunks, selectedChunks = self.getChunksAndSelectedChunks(docs_and_scores_vanilla, k)
+            raptorChunks, __ = self.getChunksAndSelectedChunks(docs_and_scores_raptor, 0)
         else:
-            local_pdf_path = self.docStore
-
-        with open(local_pdf_path, "rb") as pdf_file:
-            docs = get_document_text(pdf_file, title="Analysis of Logic")
-
-        return docs
-
-    def sendRetrievalData(self, query, docs_and_scores, searchBy, chunkSize, chunkOverlap, k, id):
-        chunks, selectedChunks = self.getChunksAndSelectedChunks(docs_and_scores, k)
-
+            raise ValueError("Invalid retrieval mode, must be 'raptor' or 'vanilla'")
+        
         data = {
             'type': 'Retrieval',
             'query': query,
-            'chunks': chunks,
+            'vanillaChunks': vanillaChunks, 
+            'raptorChunks': raptorChunks,
             'selectedChunks': selectedChunks,
+            'retrievalMode': retrievalMode,
             'searchBy': searchBy,
             'chunkSize': chunkSize,
             'chunkOverlap': chunkOverlap,
@@ -272,8 +547,15 @@ class Retriever:
                 'score': score,
                 'id': index,
             }
-            chunks.append(chunk)
+            if not self.containsChunk(chunk, chunks):
+                chunks.append(chunk)
             if index < k:
-                selectedChunks.append(index)
+                selectedChunks.append(chunk)
 
         return chunks, selectedChunks
+
+    def containsChunk(self, chunk, chunks):
+        for c in chunks:
+            if c['text'] == chunk['text'] and c['score'] == chunk['score'] and c['id'] == chunk['id']:
+                return True
+        return False

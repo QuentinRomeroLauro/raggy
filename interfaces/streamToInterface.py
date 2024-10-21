@@ -59,7 +59,7 @@ def getChunksAndSelectedChunks(docs_and_scores, k):
         }
         chunks.append(chunk)
         if index < int(k):
-            selectedChunks.append(str(index))
+            selectedChunks.append(chunk)
 
     return chunks, selectedChunks
 
@@ -80,27 +80,49 @@ def runWhatIfLLM(prompt, max_tokens=100, temperature=0.7):
     return data
 
 
-def runWhatIfRetrieval(query, searchBy, chunkSize, chunkOverlap, k):
-    retriever = Retriever(docStore="./task/documents/QuentinRomeroLauro-SWE-Resume-24.pdf", client=False)
-    docs_and_scores = retriever.invoke(
+def runWhatIfRetrieval(query, searchBy, chunkSize, chunkOverlap, k, retrievalMode):
+    retriever = Retriever(docStore="./task/documents/policy_pdfs", client=False)
+    docs_and_scores_vanilla = retriever.invoke(
         query=str(query),
         searchBy=str(searchBy),
         chunkSize=int(chunkSize),
         chunkOverlap=int(chunkOverlap),
         k=int(k),
+        send=False,
+        retrievalMode='vanilla',
     )
 
-    chunks, selectedChunks = getChunksAndSelectedChunks(docs_and_scores, k)
+    docs_and_scores_raptor = retriever.invoke(
+        query=str(query),
+        searchBy=str(searchBy),
+        chunkSize=int(chunkSize),
+        chunkOverlap=int(chunkOverlap),
+        k=int(k),
+        send=False,
+        retrievalMode='raptor',
+    )
+
+    if retrievalMode == "raptor":
+        vanillaChunks, __ = getChunksAndSelectedChunks(docs_and_scores_vanilla, 0)
+        raptorChunks, selectedChunks = getChunksAndSelectedChunks(docs_and_scores_raptor, k)
+    elif retrievalMode == "vanilla":
+        vanillaChunks, selectedChunks = getChunksAndSelectedChunks(docs_and_scores_vanilla, k)
+        raptorChunks, __ = getChunksAndSelectedChunks(docs_and_scores_raptor, 0)
+    else:
+        raise ValueError("Invalid retrieval mode, must be 'raptor' or 'vanilla'")
+
     id = str(uuid.uuid4())
 
     data = {
         'type': 'Retrieval',
         'query': query,
-        'chunks': chunks,
+        'vanillaChunks': vanillaChunks,
+        'raptorChunks': raptorChunks,
         'selectedChunks': selectedChunks,
         'searchBy': searchBy,
         'chunkSize': chunkSize,
         'chunkOverlap': chunkOverlap,
+        'retrievalMode': retrievalMode,
         'k': k,
         'order': increment_counter(), # maybe this shouldn't increment because it is a what if scenario
         'id': id,
@@ -124,6 +146,7 @@ def send_answer():
 
 @app.route('/send_query_data', methods=['POST'])
 def send_query_data():
+    kill_all_waiting_processes()
     data = request.json
     socketio.emit('query', data)
     return f"Query Data {str(data)} sent"
@@ -138,7 +161,14 @@ def send_llm_data():
 @app.route('/get_whatIf_data', methods=['POST'])
 def get_whatIf_data():
     data = request.json
-    data = runWhatIfRetrieval(data['query'], data['searchBy'], data['chunkSize'], data['chunkOverlap'], data['k'])
+    print("data", data)
+    data = runWhatIfRetrieval(query=data['query'], 
+        searchBy=data['searchBy'], 
+        chunkSize=data['chunkSize'], 
+        chunkOverlap=data['chunkOverlap'], 
+        k=data['k'], 
+        retrievalMode=data['retrievalMode']
+    )
     return jsonify(data), 200
 
 
@@ -149,6 +179,7 @@ def finish_running_pipeline():
     id = data.get('id')
     print("waiting processes", waiting_processes)
     # Load the associated stopped process pid with the id
+    # some fix:? while pid not in waiting_processes: pass, and then get the id? 
     pid = waiting_processes[id]
 
     # Parse if the data is a retrieval or LLM or query
@@ -178,6 +209,7 @@ def finish_running_pipeline():
 @app.route('/get_whatIf_llm', methods=['POST'])
 def get_whatIf_llm():
     data = request.json
+    print("data", data)
     data = runWhatIfLLM(data['prompt'], data['max_tokens'], data['temperature'])
     return jsonify(data), 200
 
@@ -207,12 +239,32 @@ def show_waiting_processes():
     return jsonify(waiting_processes)
 
 
+@app.route('/get_traces', methods=['GET'])
+def get_traces():
+    try:
+        with open('traces/trace.jsonl', 'r') as file:
+            traces = file.readlines()
+    except: 
+        # if the folder or file doesn't exist, return an empty list
+        return jsonify([])
+    return jsonify(traces)
+
 @app.route('/set_loading', methods=['POST'])
 def set_loading():
     data = request.json
     socketio.emit('loading', data)
     return f"Loading {str(data)} sent"
 
+from interfaces.helpers.evaluate import evaluate_traces_embedding_distance
+
+@app.route('/get_evaluation_embedding_distance', methods=['POST'])
+def get_evaluation_embedding_distance():
+    data = request.json
+    query = data['query']
+    answer = data['answer']
+    score = evaluate_traces_embedding_distance(query, answer)
+    return jsonify(score)
+    
 
 @app.route('/save_trace', methods=['POST'])
 def add_trace():
@@ -221,11 +273,12 @@ def add_trace():
         selectedChunks = data['selectedChunks']
         chunks = data['chunks']
         output = [chunks[int(i)]['text'] for i in selectedChunks]
-        create_trace(data['query'], output, data['type'])
+        data = create_trace(data['query'], output, data['type'])
     elif data['type'] == 'LLM':
-        create_trace(data['promptText'], data['responseText'], data['type'])
+        data = create_trace(data['promptText'], data['responseText'], data['type'])
     elif data['type'] == 'Answer':
-        create_trace(data['query'], data['answer'], data['type'])
+        data = create_trace(data['query'], data['answer'], data['type'])
+    socketio.emit('traces', data)
     return f"Trace for {str(data)} added"
 
 
@@ -234,6 +287,12 @@ def awake_process(unique_id):
     pid = waiting_processes[unique_id]
     os.kill(pid, signal.SIGUSR1)
     return f"Process {pid} with id {unique_id} has been awakened"
+
+
+def kill_all_waiting_processes():
+    for pid in waiting_processes.values():
+        os.kill(pid, signal.SIGTERM)
+    return "All waiting processes have been killed"
 
 
 if __name__ == '__main__':

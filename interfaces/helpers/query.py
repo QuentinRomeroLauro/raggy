@@ -74,7 +74,6 @@ class Query:
                 pass
 
             data = requests.get(f"http://localhost:5001/get_data/{qid}").json()
-            print("data in query: ", data)
             self.query = data.get('query')
 
             # tell the server to delete the old id:pid mapping
@@ -89,7 +88,6 @@ class Query:
                 sigset = {signal.SIGUSR1}
                 # block the signals so they can be waited for
                 signal.pthread_sigmask(signal.SIG_BLOCK, sigset)
-
 
                 response = requests.post(f"http://localhost:5001/register_process/{qid}/{pid}")
                 self.executeQuery(send=False, duplicate=True, query=query, qid=qid)
