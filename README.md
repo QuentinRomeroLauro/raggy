@@ -8,7 +8,7 @@ Raggy automatically indexes your documents and allows you to interactively debug
 ## Installation
 
 ```bash
-git clone https://github.com/quentin-romero/raggy.git
+git clone https://github.com/QuentinRomeroLauro/raggy.git
 cd raggy
 pip install -e .
 ```
