@@ -1,0 +1,46 @@
+.chunk {
+    background-color: #f0f0f0; /* Default light gray background */
+    border-radius: 10px; /* Rounded rectangle shape */
+    padding-left: 10px;
+    padding-top: 5px;
+    margin: 0px 0;
+    width: 100%;
+    box-sizing: border-box;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    font-size: small;
+}
+
+.chunk:hover{
+    transform: scale(1.03)
+} 
+
+.chunk.selected {
+    background-color: #CEFFCD;
+    ; /* Different background color when selected */
+}
+
+.chunk-header {
+    display: flex;
+    justify-content:first baseline;
+    align-items: center;
+    margin-bottom: px;
+    font-weight: bold;
+    gap: 20px;
+}
+
+.chunk-text {
+    margin-top: 10px;
+    text-align: left;
+    overflow-y: auto;
+    font-family: 'Noto Sans', 'Noto Sans CJK SC', 'Noto Sans CJK TC', 'Noto Sans CJK JP', 'Arial Unicode MS', Arial, sans-serif;
+}
+
+.toggle-select {
+    cursor: pointer;
+    color: rgb(0, 0, 0);
+    /* text-decoration: underline; */
+}
+
+.toggle-select:hover {
+    text-decoration: none;
+}

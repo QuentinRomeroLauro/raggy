@@ -1,0 +1,11 @@
+
+.parameter {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 20px;
+}
+
+.parameter-name {
+    font-size: 20px;
+}

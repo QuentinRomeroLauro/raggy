@@ -1,0 +1,29 @@
+.search-bar {
+    display: flex;
+    align-items: center;
+    background-color: #f0f0f0;
+    border-radius: 30px; /* Rounded rectangle shape */
+    padding: 2px;
+    padding-left: 5px;
+    padding-right: 5px;
+    width: 100%;
+    box-sizing: border-box;
+    gap: 0px; /* Space between input and dropdown */
+}
+
+.search-input {
+    flex-grow: 1;
+    border: none;
+    border-radius: 20px;
+    padding: 10px;
+    outline: none;
+    background-color: #f0f0f0;
+}
+
+.search-dropdown {
+    border: none;
+    border-radius: 20px;
+    padding: 10px;
+    outline: none;
+    background-color: #f0f0f0;
+}

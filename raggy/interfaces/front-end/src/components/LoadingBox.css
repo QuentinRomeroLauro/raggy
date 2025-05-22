@@ -1,0 +1,78 @@
+.collapsible-box {
+    width: 90%;
+    border-radius: 20px;
+    background-color: #f0f0f0;
+    transition: all 0.3s ease;
+    color: black;
+    margin: 10px;
+    padding: 10px;
+}
+
+.collapsible-box.collapsed {
+    height: 55px; /* Adjust this height as needed for the collapsed state */
+    overflow: hidden;
+}
+
+.collapsible-box.expanded {
+    height: auto; /* Use auto to fit the content */
+    overflow: visible; /* Ensure content is visible */
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    /* background-color: #e0e0e0; */
+    border-radius: 20px 20px 0 0;
+    color: black;
+}
+
+.title {
+    font-weight: bold;
+    color: black;
+    margin-right: 2cqmax;
+}
+
+.options {
+    display: flex;
+    gap: 10px;
+}
+
+.title-and-options {
+    display: flex;
+}
+
+
+.option-button {
+    background-color: #b8ddff;
+    border: none;
+    border-radius: 10px;
+    padding: 5px 10px;
+    color: #000;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.icon {
+    border: none;
+    border-radius: 20px;
+    padding: 5px 10px;
+    color: #000;
+    font-weight: bold;
+    /* cursor: pointer; */
+    animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+.content {
+    height: fit-content;
+}

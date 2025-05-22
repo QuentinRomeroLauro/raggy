@@ -1,0 +1,44 @@
+.retrieval-box {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    display: flex;
+    flex-wrap: nowrap; /* Prevents wrapping */
+    gap: 10px;
+    align-items: flex-start; /* Align items to the top */
+    justify-content: flex-start; /* Align to the left */
+    width: 100%;
+    height: 100%;
+    box-sizing: border-box;
+}
+
+.query-and-params {
+    background-color: rgba(0, 0, 0, 0.0) !important;
+    box-shadow: none !important;
+    min-width: 380px; 
+    max-width: calc(50% - 10px);
+    flex-shrink: 0; /* Prevent it from shrinking */
+}
+
+.chunk-holder {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1; /* Allow it to grow and take up available space */
+    box-sizing: border-box;
+    height: 100%; /* Ensure it takes up full height of the parent */
+    min-width: 0; /* Allow the width to shrink when necessary */
+}
+
+.chunk-box {
+    flex-grow: 1; /* Allow it to grow and fill the remaining space */
+    box-sizing: border-box;
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 10px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    gap: 10px;
+    margin-bottom: 10px;
+    min-width: 0; /* Allow the width to shrink when necessary */
+}

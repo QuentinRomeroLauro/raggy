@@ -1,0 +1,68 @@
+.double-editable-box {
+    padding-top: 5px;
+    padding-bottom: 5px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.editable-box {
+    background-color: #ffffff;
+    border-radius: 20px;
+    padding: 10px;
+    width: 100%;
+    height: 100%; /* Ensure the box itself has height */
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.top-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.box-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2px;
+}
+
+.innerTitle {
+    font-weight: bold;
+    font-size: medium;
+}
+
+.edit-button {
+    background-color: #b8ddff;
+    border: none;
+    border-radius: 10px;
+    padding: 5px 10px;
+    margin-left: 3px;
+    margin-right: 3px;
+    color: #000;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.edit-button:hover {
+    background-color: #a0cfff;
+}
+
+.editContent {
+    width: 100%;
+    /* height: 100%; */
+    flex-grow: 1;
+    /* min-height: 150px; */
+    border: 1px solid #ccc;
+    border-radius: 10px;
+    padding: 10px;
+    resize: none;
+    box-sizing: border-box;
+}

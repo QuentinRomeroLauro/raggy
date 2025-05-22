@@ -1,0 +1,88 @@
+.collapsible-box {
+    width: 90%;
+    border-radius: 20px;
+    background-color: #f0f0f0;
+    transition: all 0.3s ease;
+    color: black;
+    margin: 10px;
+    padding: 10px;
+}
+
+.collapsible-box:hover{
+    cursor: pointer;
+} 
+
+.collapsible-box.collapsed {
+    height: 55px; /* Adjust this height as needed for the collapsed state */
+    overflow: hidden;
+}
+
+.collapsible-box.expanded {
+    height: auto; /* Use auto to fit the content */
+    overflow: visible; /* Ensure content is visible */
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    /* background-color: #e0e0e0; */
+    border-radius: 20px 20px 0 0;
+    color: black;
+}
+
+.title {
+    font-weight: bold;
+    color: black;
+    margin-right: 2cqmax;
+}
+
+.options {
+    display: flex;
+    gap: 10px;
+}
+
+.score {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.title-and-options {
+    flex: 1;
+    display: flex;
+    justify-content: space-between;
+}
+
+
+.option-button {
+    background-color: #b8ddff;
+    border: none;
+    border-radius: 10px;
+    padding: 5px 10px;
+    color: #000;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.option-button:hover {
+    background-color: #a0cfff;
+}
+
+.collapse-icon {
+    border: none;
+    border-radius: 10px;
+    padding: 5px 10px;
+    color: #000;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
+}
+
+.collapse-icon:hover {
+    background-color: #a0cfff;
+}
+
+.content {
+    height: fit-content;
+}
