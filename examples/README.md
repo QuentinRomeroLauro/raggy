@@ -17,15 +17,37 @@ hospital-rag/
 
 ### Running the Example
 
-1. Install the package in development mode:
+1. First, make sure you have Python 3.10 installed:
 ```bash
-pip install -e .
+# On macOS with Homebrew:
+brew install python@3.10
+
+# Create and activate virtual environment
+python3.10 -m venv venv
+source venv/bin/activate
+
+# Verify Python version (should show Python 3.10.x)
+python --version
 ```
 
-2. Run the example pipeline:
+2. Install the package and required dependencies in the correct order:
+```bash
+pip install -e .
+pip install --upgrade pip
+pip install numpy==1.24.3
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
+pip install scikit-learn
+pip install langchain_openai langchain_community
+pip install flask-cors
+pip install eventlet
+pip install psutil
+pip install docling==2.3.0
+```
+
+3. Run the example pipeline:
 ```bash
 cd examples/hospital-rag
-python scripts/pipeline.py
+python pipeline.py
 ```
 
 The pipeline will:
