@@ -1,4 +1,6 @@
-# Meet RAGGY for RAG Without the LAG
+# RAGGY
+Raggy is an interactive debugging tool for retrieval-augmented generation (RAG) pipelines. Please see our [paper](https://arxiv.org/abs/2504.13587) for more details.
+
 
 RAG Without the LAG: Interactive Debugging for Retrieval-Augmented Generation Pipelines by Quentin Romero Lauro, Shreya Shankar, Sepanta Zeighami, and Aditya Parameswaran.
 
