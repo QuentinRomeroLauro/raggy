@@ -91,7 +91,7 @@ See the [examples/README.md](examples/README.md) for more details.
 ## Paper
 [Our paper](https://arxiv.org/abs/2504.13587) and accompanying user study are now available on arXiv!
 ```bibtex
-@article{lauro2025raglaginteractivedebugging,
+@misc{romerolauroShankar2025raglaginteractivedebugging,
       title={RAG Without the Lag: Interactive Debugging for Retrieval-Augmented Generation Pipelines}, 
       author={Quentin Romero Lauro and Shreya Shankar and Sepanta Zeighami and Aditya Parameswaran},
       year={2025},
