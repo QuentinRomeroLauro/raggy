@@ -81,6 +81,13 @@ The debug interface consists of:
 - Backend server (`interfaces/server.py`)
 - Frontend application (`interfaces/front-end/`)
 
+## Examples
+
+We have an example in the `examples/` directory.
+- `hospital-rag/`: A simple example demonstrating how to use the Raggy package for RAG-based question answering using hospital policy documents.
+
+See the [examples/README.md](examples/README.md) for more details.
+
 ## Paper
 [Our paper](https://arxiv.org/abs/2504.13587) and accompanying user study are now available on arXiv!
 ```bibtex
