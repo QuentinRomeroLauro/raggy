@@ -10,32 +10,9 @@ Raggy automatically indexes your documents and allows you to interactively debug
 ## Installation
 
 ```bash
-# First, make sure you have Python 3.10 installed
-# On macOS with Homebrew:
-brew install python@3.10
-
-# Create a new virtual environment with Python 3.10
-python3.10 -m venv venv
-source venv/bin/activate
-
-# Verify Python version (should show Python 3.10.x)
-python --version
-
-# Clone and install the package
 git clone https://github.com/QuentinRomeroLauro/raggy.git
 cd raggy
 pip install -e .
-
-# Install dependencies in the correct order
-pip install --upgrade pip
-pip install numpy==1.24.3
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cpu
-pip install scikit-learn
-pip install langchain_openai langchain_community
-pip install flask-cors
-pip install eventlet
-pip install psutil
-pip install docling==2.3.0
 ```
 
 ## Usage
